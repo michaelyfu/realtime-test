@@ -1,2 +1,2 @@
 [phases.setup]
-aptPkgs = ["libasound2-dev", "alsa-lib","pkg-config"]
+aptPkgs = ["libasound2-dev","pkg-config"]
