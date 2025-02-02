@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "description": "OpenAI Realtime API Reference Client (beta)",
-  "main": "index.js",
-  "types": "./dist/index.d.ts",
-  "scripts": {
-    "test": "mocha ./test/index.js"
-  },
   "author": "Keith Horwood <khorwood@openai.com>",
+  "scripts": {
+    "start": "node app.js"
+  },
   "license": "MIT",
   "devDependencies": {
     "audio-decode": "^2.2.2",

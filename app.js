@@ -32,8 +32,13 @@ import dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+// Set up __dirname equivalent for ES modules
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const server = http.createServer(app);
@@ -47,7 +52,15 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'],
 });
 
-// Move this to the top of your existing socket.io connection handling
+const PORT = process.env.PORT || 3000;
+
+// Serve static files from the "public" directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Add this line to serve files from the views directory
+app.use('/views', express.static(path.join(__dirname, 'views')));
+
+// CORS middleware
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
@@ -55,8 +68,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Update the 404 handler to handle missing file more gracefully
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(__dirname, 'views', '404.html'), (err) => {
+    if (err) {
+      console.error('Error sending 404 page:', err);
+      res.status(404).send('404 - Page Not Found');
+    }
+  });
+});
+
 const API_KEY = process.env.OPENAI_API_KEY;
-const PORT = process.env.PORT || 3000;
 
 if (!API_KEY) {
   console.error(
@@ -74,9 +96,6 @@ let micInstance;
 let speaker;
 let activeConnections = new Set();
 let isClientConnected = false;
-
-// Serve static files from a 'public' directory
-app.use(express.static('public'));
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -184,7 +203,7 @@ client.on('conversation.item.completed', ({ item }) => {
 
 // Start the server
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}/`);
 });
 
 // BEGIN MANAGE Mac AUDIO INTERFACES
