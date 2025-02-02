@@ -1,7 +1,11 @@
 FROM node:18
 
 # Install the ALSA development libraries
-RUN apt-get update && apt-get install -y libasound2-dev
+RUN apt-get update && apt-get install -y \
+    alsa-utils \
+    libasound2 \
+    libasound2-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
