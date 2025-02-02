@@ -1,2 +1,0 @@
-[phases.setup]
-aptPkgs = ["libasound2-dev","pkg-config"]
