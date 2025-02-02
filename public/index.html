@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Voice Assistant</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  </head>
+  <body>
+    <button id="startBtn">Start Voice Assistant</button>
+    <div id="status"></div>
+
+    <script>
+      const socket = io({
+        path: '/api/socket.io/',
+        transports: ['websocket', 'polling'],
+        autoConnect: true,
+        reconnection: true,
+        forceNew: true,
+      });
+
+      const startBtn = document.getElementById('startBtn');
+      const status = document.getElementById('status');
+      let mediaRecorder;
+      let audioContext;
+      let isRecording = false;
+
+      startBtn.addEventListener('click', async () => {
+        if (!isRecording) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+            });
+            audioContext = new AudioContext();
+
+            socket.emit('startStream');
+
+            mediaRecorder = new MediaRecorder(stream, {
+              mimeType: 'audio/webm;codecs=opus',
+              bitsPerSecond: 16000,
+            });
+            mediaRecorder.ondataavailable = async (event) => {
+              if (event.data.size > 0) {
+                try {
+                  const arrayBuffer = await event.data.arrayBuffer();
+                  socket.emit('audioData', arrayBuffer);
+                } catch (error) {
+                  console.error('Error processing audio chunk:', error);
+                  status.textContent = 'Error processing audio';
+                }
+              }
+            };
+
+            mediaRecorder.start(200); // Capture in 200ms chunks
+            isRecording = true;
+            startBtn.textContent = 'Stop';
+            status.textContent = 'Recording...';
+          } catch (error) {
+            console.error('Error starting recording:', error);
+            status.textContent = 'Error: ' + error.message;
+          }
+        } else {
+          mediaRecorder.stop();
+          isRecording = false;
+          startBtn.textContent = 'Start Voice Assistant';
+          status.textContent = 'Stopped';
+          socket.emit('createResponse');
+        }
+      });
+
+      socket.on('audioResponse', (audioData) => {
+        console.log('Received audio response:', {
+          type: typeof audioData,
+          length: audioData ? audioData.length : 0,
+          isArray: Array.isArray(audioData),
+        });
+
+        if (audioData && audioData.length > 0) {
+          // Convert back to Int16Array
+          const int16Array = new Int16Array(audioData);
+          playAudio(int16Array);
+        } else {
+          console.error('Received empty audio data');
+          status.textContent = 'No audio response received';
+        }
+      });
+
+      socket.on('error', (errorMessage) => {
+        console.error('Server error:', errorMessage);
+        status.textContent = 'Error: ' + errorMessage;
+        if (mediaRecorder && isRecording) {
+          mediaRecorder.stop();
+          isRecording = false;
+          startBtn.textContent = 'Start Voice Assistant';
+        }
+      });
+
+      socket.on('disconnect', () => {
+        status.textContent = 'Disconnected from server';
+        if (mediaRecorder && isRecording) {
+          mediaRecorder.stop();
+          isRecording = false;
+          startBtn.textContent = 'Start Voice Assistant';
+        }
+      });
+
+      function convertToInt16(audioBuffer) {
+        const samples = audioBuffer.getChannelData(0);
+        const int16Array = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) {
+          int16Array[i] = Math.max(
+            -32768,
+            Math.min(32767, Math.floor(samples[i] * 32768)),
+          );
+        }
+        return int16Array;
+      }
+
+      async function playAudio(audioData) {
+        try {
+          if (!audioData || audioData.length === 0) {
+            throw new Error('Invalid audio data');
+          }
+
+          console.log('Playing audio, length:', audioData.length);
+          const audioContext = new AudioContext();
+
+          // Convert Int16Array to Float32Array for Web Audio API
+          const float32Array = new Float32Array(audioData.length);
+          for (let i = 0; i < audioData.length; i++) {
+            // Normalize to [-1, 1]
+            float32Array[i] = audioData[i] / 32768.0;
+          }
+
+          const audioBuffer = audioContext.createBuffer(
+            1,
+            float32Array.length,
+            24000,
+          );
+          audioBuffer.getChannelData(0).set(float32Array);
+
+          const source = audioContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioContext.destination);
+
+          // Add event listeners for debugging
+          source.onended = () => {
+            console.log('Audio playback completed');
+            audioContext.close();
+          };
+
+          source.start();
+          status.textContent = 'Playing audio response...';
+        } catch (error) {
+          console.error('Error playing audio:', error);
+          status.textContent = 'Error playing audio response: ' + error.message;
+        }
+      }
+    </script>
+  </body>
+</html>
